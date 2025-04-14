@@ -1,0 +1,2 @@
+# Disco Elysium Dialogue Searcher
+ 
