@@ -1,8 +1,8 @@
 # Disco Elysium Dialogue Searcher
  
-Small flask project to find dialogue lines from Disco Elysium Final Cut Edition.
-
-Mainly used when I want to find Disco Elysium lines and https://fayde.co.uk/ is down. This is a much simpler program compared to that. This is for personal use and not in active development.
+Purpose:
+Small Python flask project to find dialogue lines from Disco Elysium Final Cut Edition. This is run locally.
+This is mainly used when I want to find Disco Elysium lines and https://fayde.co.uk/ is down. This is a much simpler program compared to that. This is for personal use and not in active development.
 
 Features:
 Filter lines from Disco Elysium by Actors and dialogue keywords
@@ -18,4 +18,4 @@ Instructions:
 8) Run the app by typing: `flask run`. The app will be accessible at `http://127.0.0.1:5000/`.
 
 
-Feel free to email me at contact@domloh.com for anything regarding this project.
+Contact: Feel free to email me at contact@domloh.com for anything regarding this project.
