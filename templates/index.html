@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Disco Elysium Dialogue Search App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background-color: #1e1e1e;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        }
+        h2 {
+            text-align: center;
+            color: #ffffff;
+        }
+        label {
+            font-weight: bold;
+        }
+        input, button {
+            display: block;
+            margin-bottom: 10px;
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            background-color: #333;
+            color: #e0e0e0;
+        }
+        input::placeholder {
+            color: #aaa;
+        }
+        button {
+            background-color: #6200ea;
+            cursor: pointer;
+            color: #ffffff;
+            font-weight: bold;
+        }
+        button:hover {
+            background-color: #3700b3;
+        }
+        #actor-list {
+            border: 1px solid #333;
+            max-height: 150px;
+            overflow-y: auto;
+            position: absolute;
+            width: calc(100% - 22px);
+            background: #1e1e1e;
+            z-index: 10;
+            display: none;
+            border-radius: 5px;
+        }
+        .actor-item {
+            padding: 10px;
+            cursor: pointer;
+            color: #e0e0e0;
+        }
+        .actor-item:hover {
+            background-color: #333;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #1e1e1e;
+            border-radius: 5px;
+        }
+        th, td {
+            border: 1px solid #333;
+            padding: 10px;
+            text-align: left;
+            color: #e0e0e0;
+        }
+        th {
+            background-color: #6200ea;
+            color: #ffffff;
+        }
+        tr:nth-child(even) {
+            background-color: #222;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Disco Elysium Dialogue Searcher</h2>
+
+        <label for="actor-search">Search Actor:</label>
+        <input type="text" id="actor-search" placeholder="Type to search actors" onkeyup="filterActors()">
+        <div id="actor-list"></div>
+        
+        <label for="keyword">Dialogue Keyword:</label>
+        <input type="text" id="keyword" placeholder="Enter keyword">
+        
+        <button onclick="searchDialogues()">Search</button>
+        
+        <table id="results">
+            <thead>
+                <tr>
+                    <th>Actor</th>
+                    <th>Dialogue</th>
+                </tr>
+            </thead>
+            <tbody>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        // Function to handle Enter key press on input fields
+document.addEventListener("DOMContentLoaded", function() {
+    const actorInput = document.getElementById('actor-search');
+    const keywordInput = document.getElementById('keyword');
+    const searchButton = document.querySelector('button');
+
+    // Add event listener to both input fields
+    function handleKeyPress(event) {
+        if (event.key === 'Enter') {
+            searchButton.click(); // Trigger the search button click
+        }
+    }
+
+    actorInput.addEventListener('keypress', handleKeyPress);
+    keywordInput.addEventListener('keypress', handleKeyPress);
+});
+        let allActors = [];
+
+        async function fetchActors() {
+            const response = await fetch('/get-actors');
+            allActors = await response.json();
+        }
+
+        function filterActors() {
+            const input = document.getElementById('actor-search').value.toLowerCase();
+            const list = document.getElementById('actor-list');
+            list.innerHTML = '';
+
+            if (input.length === 0) {
+                list.style.display = 'none';
+                return;
+            }
+
+            const filteredActors = allActors.filter(actor => actor.toLowerCase().includes(input));
+
+            filteredActors.forEach(actor => {
+                const div = document.createElement('div');
+                div.classList.add('actor-item');
+                div.textContent = actor;
+                div.onclick = () => selectActor(actor);
+                list.appendChild(div);
+            });
+
+            list.style.display = filteredActors.length > 0 ? 'block' : 'none';
+        }
+
+        function selectActor(actor) {
+            document.getElementById('actor-search').value = actor;
+            document.getElementById('actor-list').style.display = 'none';
+        }
+
+        async function searchDialogues() {
+            const actor = document.getElementById('actor-search').value;
+            const keyword = document.getElementById('keyword').value;
+            
+            const response = await fetch(`/search-dialogues?actor=${actor}&keyword=${keyword}`);
+            const data = await response.json();
+            const tbody = document.getElementById('results').querySelector('tbody');
+            tbody.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td>${row.actor}</td><td>${row.dialogue}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        fetchActors();
+    </script>
+</body>
+</html>
