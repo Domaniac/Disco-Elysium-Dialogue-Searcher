@@ -165,13 +165,17 @@ document.addEventListener("DOMContentLoaded", function() {
         function selectActor(actor) {
             document.getElementById('actor-search').value = actor;
             document.getElementById('actor-list').style.display = 'none';
-        }
-
+        }        
+        
         async function searchDialogues() {
             const actor = document.getElementById('actor-search').value;
             const keyword = document.getElementById('keyword').value;
             
-            const response = await fetch(`/search-dialogues?actor=${actor}&keyword=${keyword}`);
+            // Properly encode URL parameters to handle special characters like commas and hash symbols
+            const encodedActor = encodeURIComponent(actor);
+            const encodedKeyword = encodeURIComponent(keyword);
+            
+            const response = await fetch(`/search-dialogues?actor=${encodedActor}&keyword=${encodedKeyword}`);
             const data = await response.json();
             const tbody = document.getElementById('results').querySelector('tbody');
             tbody.innerHTML = '';
