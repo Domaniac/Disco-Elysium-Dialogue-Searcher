@@ -84,9 +84,56 @@
         th {
             background-color: #6200ea;
             color: #ffffff;
-        }
-        tr:nth-child(even) {
+        }        tr:nth-child(even) {
             background-color: #222;
+        }
+        .button-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .button-row button {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        .secondary-button {
+            background-color: #424242 !important;
+        }
+        .secondary-button:hover {
+            background-color: #616161 !important;
+        }
+        .actor-browser {
+            display: none;
+            margin-top: 20px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #333;
+            border-radius: 5px;
+            background-color: #1e1e1e;
+        }
+        .actor-browser-item {
+            padding: 8px 12px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .actor-browser-item:hover {
+            background-color: #333;
+        }
+        .actor-browser-item:last-child {
+            border-bottom: none;
+        }
+        .dialogue-count {
+            color: #aaa;
+            font-size: 12px;
+            background-color: #333;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+        .no-dialogue {
+            color: #666;
         }
     </style>
 </head>
@@ -101,7 +148,16 @@
         <label for="keyword">Dialogue Keyword:</label>
         <input type="text" id="keyword" placeholder="Enter keyword">
         
-        <button onclick="searchDialogues()">Search</button>
+        <div class="button-row">
+            <button onclick="searchDialogues()">Search</button>
+            <button class="secondary-button" onclick="toggleActorBrowser()">List of Actors</button>
+        </div>
+        
+        <div id="actor-browser" class="actor-browser">
+            <div style="padding: 10px; border-bottom: 1px solid #333; font-weight: bold; background-color: #333;">
+                All Actors (Loading...)
+            </div>
+        </div>
         
         <table id="results">
             <thead>
@@ -131,12 +187,77 @@ document.addEventListener("DOMContentLoaded", function() {
 
     actorInput.addEventListener('keypress', handleKeyPress);
     keywordInput.addEventListener('keypress', handleKeyPress);
-});
-        let allActors = [];
+});        let allActors = [];
+        let allActorsWithCounts = [];
 
         async function fetchActors() {
             const response = await fetch('/get-actors');
             allActors = await response.json();
+        }
+
+        async function fetchAllActorsWithCounts() {
+            try {
+                const response = await fetch('/get-all-actors');
+                allActorsWithCounts = await response.json();
+                updateActorBrowserHeader();
+            } catch (error) {
+                console.error('Error fetching actors with counts:', error);
+            }
+        }
+
+        function updateActorBrowserHeader() {
+            const header = document.querySelector('#actor-browser > div');
+            const totalActors = allActorsWithCounts.length;
+            const actorsWithDialogue = allActorsWithCounts.filter(a => a.dialogue_count > 0).length;
+            header.textContent = `All Actors (${totalActors} total, ${actorsWithDialogue} with dialogue)`;
+        }
+
+        function toggleActorBrowser() {
+            const browser = document.getElementById('actor-browser');
+            if (browser.style.display === 'none' || browser.style.display === '') {
+                browser.style.display = 'block';
+                populateActorBrowser();
+            } else {
+                browser.style.display = 'none';
+            }
+        }
+
+        function populateActorBrowser() {
+            const browser = document.getElementById('actor-browser');
+            const existingItems = browser.querySelectorAll('.actor-browser-item');
+            existingItems.forEach(item => item.remove());
+
+            allActorsWithCounts.forEach(actorData => {
+                const div = document.createElement('div');
+                div.classList.add('actor-browser-item');
+                if (actorData.dialogue_count === 0) {
+                    div.classList.add('no-dialogue');
+                }
+                
+                const actorName = document.createElement('span');
+                actorName.textContent = actorData.actor;
+                
+                const count = document.createElement('span');
+                count.classList.add('dialogue-count');
+                count.textContent = actorData.dialogue_count === 0 ? 'No dialogue' : `${actorData.dialogue_count} lines`;
+                
+                div.appendChild(actorName);
+                div.appendChild(count);
+                
+                if (actorData.dialogue_count > 0) {
+                    div.onclick = () => selectActorFromBrowser(actorData.actor);
+                }
+                
+                browser.appendChild(div);
+            });
+        }
+
+        function selectActorFromBrowser(actor) {
+            document.getElementById('actor-search').value = actor;
+            document.getElementById('actor-list').style.display = 'none';
+            document.getElementById('actor-browser').style.display = 'none';
+            // Optionally trigger search immediately
+            // searchDialogues();
         }
 
         function filterActors() {
@@ -166,7 +287,7 @@ document.addEventListener("DOMContentLoaded", function() {
             document.getElementById('actor-search').value = actor;
             document.getElementById('actor-list').style.display = 'none';
         }        
-        
+
         async function searchDialogues() {
             const actor = document.getElementById('actor-search').value;
             const keyword = document.getElementById('keyword').value;
@@ -187,6 +308,7 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         fetchActors();
+        fetchAllActorsWithCounts();
     </script>
 </body>
 </html>

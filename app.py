@@ -22,6 +22,24 @@ def get_actors():
     actor_list = [actor['name'] for actor in actors]
     return jsonify(actor_list)
 
+@app.route('/get-all-actors', methods=['GET'])
+def get_all_actors():
+    conn = get_db_connection()
+    # Get all actors with their dialogue counts
+    query = """
+        SELECT actors.name AS actor, 
+               COUNT(dentries.id) AS dialogue_count
+        FROM actors 
+        LEFT JOIN dentries ON actors.id = dentries.actor
+        GROUP BY actors.id, actors.name
+        ORDER BY dialogue_count DESC, actors.name ASC
+    """
+    results = conn.execute(query).fetchall()
+    conn.close()
+    
+    data = [{'actor': row['actor'], 'dialogue_count': row['dialogue_count']} for row in results]
+    return jsonify(data)
+
 @app.route('/search-dialogues', methods=['GET'])
 def search_dialogues():
     actor = request.args.get('actor', '').strip()
