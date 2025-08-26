@@ -691,26 +691,84 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (e.target === modal) modal.remove();
             };
         }        
-        function renderTreeNode(node, depth) {
+        
+        function renderTreeNode(node, depth, accumulatedConditions = []) {
             if (!node) return '';
             
             const indent = '　'.repeat(depth); // Use full-width space for indentation
             const isSystemConnector = node.dialogue === '0';
             const hasSkillCheck = node.skill_check;
             
+            // Collect this node's condition if it exists
+            const currentConditions = [...accumulatedConditions];
+            if (node.condition && node.condition.trim() !== '' && node.condition !== 'null') {
+                currentConditions.push(node.condition);
+            }
+            
+            // More aggressive system connector filtering
+            if (isSystemConnector && !hasSkillCheck) {
+                // If this system connector has only one child, try to collapse it
+                if (node.children && node.children.length === 1) {
+                    const child = node.children[0];
+                    const childIsSystemConnector = child.dialogue === '0';
+                    
+                    // If the child is also a system connector, continue accumulating
+                    if (childIsSystemConnector) {
+                        return renderTreeNode(child, depth, currentConditions);
+                    }
+                    
+                    // If the child is actual dialogue, render it with accumulated conditions
+                    return renderTreeNode(child, depth, currentConditions);
+                }
+                
+                // If this system connector has multiple children but no skill check,
+                // we still want to show it as a branching point, but only if conditions are meaningful
+                if (node.children && node.children.length > 1) {
+                    const hasSignificantCondition = currentConditions.some(cond => 
+                        cond.length > 15 || 
+                        cond.includes('>=') || 
+                        cond.includes('<=') || 
+                        cond.includes('==') ||
+                        cond.includes('!=') ||
+                        cond.includes('failed') ||
+                        cond.includes('passed')
+                    );
+                    
+                    // If no significant conditions and multiple children are all system connectors,
+                    // render children directly with current accumulated conditions
+                    if (!hasSignificantCondition && 
+                        node.children.every(child => child.dialogue === '0')) {
+                        let html = '';
+                        node.children.forEach(child => {
+                            html += renderTreeNode(child, depth, currentConditions);
+                        });
+                        return html;
+                    }
+                }
+            }            
             let html = `<div style="margin: 8px 0; padding: 8px; background: ${isSystemConnector ? '#2a2a2a' : '#333'}; border-radius: 5px; border-left: 3px solid ${hasSkillCheck ? '#ff5722' : '#6200ea'};">`;
             
             html += `<div style="font-size: 12px; color: #aaa; word-wrap: break-word; white-space: pre-wrap;">${indent}${depth > 0 ? '└─ ' : ''}`;
             
             if (isSystemConnector) {
                 html += `<span style="color: #ff9800; font-weight: bold;">[SYSTEM CONNECTOR]</span>`;
-                if (node.condition) {
-                    html += `<br>${indent}   Condition: <span style="color: #ccc; font-family: monospace; font-size: 11px; word-wrap: break-word;">${node.condition}</span>`;
+                
+                // Show accumulated conditions
+                if (currentConditions.length > 0) {
+                    html += `<br>${indent}   Conditions:`;
+                    currentConditions.forEach((condition, index) => {
+                        html += `<br>${indent}     ${index + 1}. <span style="color: #ccc; font-family: monospace; font-size: 11px; word-wrap: break-word;">${condition}</span>`;
+                    });
                 }
             } else {
                 html += `<span style="color: #e0e0e0; font-weight: bold;">${node.actor}:</span> `;
-                // Remove text truncation - show full dialogue with proper wrapping
+                // Show full dialogue with proper wrapping
                 html += `<span style="color: #ccc; word-wrap: break-word; white-space: pre-wrap; display: inline-block; max-width: 100%;">${node.dialogue}</span>`;
+                
+                // Show accumulated conditions from collapsed system connectors
+                if (currentConditions.length > 0) {
+                    html += `<br>${indent}   <span style="color: #888; font-size: 10px; word-wrap: break-word; white-space: pre-wrap;">Required: ${currentConditions.join(' AND ')}</span>`;
+                }
                 
                 if (hasSkillCheck) {
                     const check = node.skill_check;
@@ -721,8 +779,8 @@ document.addEventListener("DOMContentLoaded", function() {
                     html += `<br>${indent}   <span style="${checkClass} padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-top: 4px; display: inline-block;">${difficultyDisplay}</span>`;
                 }
                 
-                if (node.condition && node.condition !== 'null') {
-                    // Show full condition text with proper wrapping
+                // Show this node's specific condition (if not already in accumulated conditions)
+                if (node.condition && node.condition !== 'null' && !currentConditions.includes(node.condition)) {
                     html += `<br>${indent}   <span style="color: #888; font-size: 10px; word-wrap: break-word; white-space: pre-wrap;">Condition: ${node.condition}</span>`;
                 }
             }
@@ -732,7 +790,7 @@ document.addEventListener("DOMContentLoaded", function() {
             // Render children
             if (node.children && node.children.length > 0) {
                 node.children.forEach(child => {
-                    html += renderTreeNode(child, depth + 1);
+                    html += renderTreeNode(child, depth + 1, []);
                 });
             }
             
