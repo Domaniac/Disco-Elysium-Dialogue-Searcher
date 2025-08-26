@@ -135,6 +135,84 @@
         .no-dialogue {
             color: #666;
         }
+        .dialogue-row {
+            cursor: pointer;
+        }
+        .dialogue-row:hover {
+            background-color: #2a2a2a !important;
+        }
+        .skill-check {
+            font-size: 12px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            margin: 2px;
+            display: inline-block;
+        }
+        .skill-check.red {
+            background-color: #d32f2f;
+            color: white;
+        }
+        .skill-check.white {
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .connections-panel {
+            display: none;
+            margin-top: 10px;
+            padding: 15px;
+            background-color: #2a2a2a;
+            border-radius: 5px;
+            border-left: 4px solid #6200ea;
+        }
+        .connections-section {
+            margin-bottom: 15px;
+        }
+        .connections-section h4 {
+            margin: 0 0 8px 0;
+            color: #6200ea;
+            font-size: 14px;
+        }
+        .connection-item {
+            padding: 8px;
+            margin: 4px 0;
+            background-color: #333;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+        .connection-actor {
+            font-weight: bold;
+            color: #e0e0e0;
+        }
+        .alternate-condition {
+            color: #aaa;
+            font-style: italic;
+            font-size: 11px;
+        }
+        .clickable-dialogue {
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+        .clickable-dialogue:hover {
+            background-color: #444;
+        }
+        .breadcrumb {
+            background-color: #1e1e1e;
+            padding: 8px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        .breadcrumb-item {
+            display: inline-block;
+            margin-right: 5px;
+        }
+        .breadcrumb-separator {
+            margin: 0 5px;
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -156,7 +234,14 @@
         <div id="actor-browser" class="actor-browser">
             <div style="padding: 10px; border-bottom: 1px solid #333; font-weight: bold; background-color: #333;">
                 All Actors (Loading...)
+            </div>        </div>
+          <div id="connections-panel" class="connections-panel">
+            <h3 style="margin-top: 0; color: #6200ea;">Dialogue Connections</h3>
+            <div style="margin-bottom: 10px;">                <button id="explore-tree-btn" onclick="exploreDialogueTree()" style="display: none; margin: 0; width: auto; padding: 5px 10px; font-size: 12px; background-color: #424242;">
+                    Explore Full Tree
+                </button>
             </div>
+            <div id="connections-content">Select a dialogue to see connections...</div>
         </div>
         
         <table id="results">
@@ -189,6 +274,8 @@ document.addEventListener("DOMContentLoaded", function() {
     keywordInput.addEventListener('keypress', handleKeyPress);
 });        let allActors = [];
         let allActorsWithCounts = [];
+        let dialogueBreadcrumb = [];
+        let currentDialogueContext = null; // Store current dialogue context
 
         async function fetchActors() {
             const response = await fetch('/get-actors');
@@ -286,8 +373,8 @@ document.addEventListener("DOMContentLoaded", function() {
         function selectActor(actor) {
             document.getElementById('actor-search').value = actor;
             document.getElementById('actor-list').style.display = 'none';
-        }        
-
+        }
+                    
         async function searchDialogues() {
             const actor = document.getElementById('actor-search').value;
             const keyword = document.getElementById('keyword').value;
@@ -300,11 +387,314 @@ document.addEventListener("DOMContentLoaded", function() {
             const data = await response.json();
             const tbody = document.getElementById('results').querySelector('tbody');
             tbody.innerHTML = '';
+            
             data.forEach(row => {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td>${row.actor}</td><td>${row.dialogue}</td>`;
+                tr.classList.add('dialogue-row');
+                
+                // Add skill check indicators
+                let indicators = '';
+                if (row.hascheck) {
+                    indicators += '<span class="skill-check white">CHECK</span>';
+                }
+                if (row.hasalts) {
+                    indicators += '<span class="skill-check" style="background-color: #ff9800; color: white;">ALT</span>';
+                }
+                
+                tr.innerHTML = `<td>${row.actor}</td><td>${row.dialogue}${indicators ? '<br>' + indicators : ''}</td>`;
+                
+                // Make row clickable to show connections
+                tr.onclick = () => showDialogueConnections(row.conversationid, row.dialogueid, row.actor, row.dialogue);
+                
                 tbody.appendChild(tr);
             });
+              // Hide connections panel when new search is performed
+            document.getElementById('connections-panel').style.display = 'none';
+            // Clear breadcrumb trail for new search
+            dialogueBreadcrumb = [];
+        }        async function showDialogueConnections(conversationId, dialogueId, actor, dialogue, fromBreadcrumb = false) {
+            try {
+                // Update breadcrumb trail unless we're navigating back
+                if (!fromBreadcrumb) {
+                    // Truncate dialogue text for breadcrumb display
+                    const breadcrumbText = dialogue.length > 50 ? dialogue.substring(0, 50) + '...' : dialogue;
+                    dialogueBreadcrumb.push({ 
+                        conversationId, 
+                        dialogueId, 
+                        actor, 
+                        dialogue: breadcrumbText,
+                        fullDialogue: dialogue 
+                    });
+                    // Limit breadcrumb to 10 items to prevent it from getting too long
+                    if (dialogueBreadcrumb.length > 10) {
+                        dialogueBreadcrumb.shift();
+                    }
+                }
+
+                currentDialogueContext = { conversationId, dialogueId, actor, dialogue };                const response = await fetch(`/get-dialogue-connections?conversationid=${conversationId}&dialogueid=${dialogueId}`);
+                const data = await response.json();
+                
+                const panel = document.getElementById('connections-panel');
+                const content = document.getElementById('connections-content');
+                const exploreBtn = document.getElementById('explore-tree-btn');
+                
+                // Show the tree exploration button
+                exploreBtn.style.display = 'inline-block';
+                
+                let html = '';
+                  // Add breadcrumb navigation
+                if (dialogueBreadcrumb.length > 1) {
+                    html += '<div class="breadcrumb">';
+                    html += '<strong>Navigation Path:</strong> ';
+                    dialogueBreadcrumb.forEach((crumb, index) => {
+                        if (index === dialogueBreadcrumb.length - 1) {
+                            // Current dialogue - not clickable
+                            html += `<span class="breadcrumb-item" style="color: #fff; font-weight: bold;">
+                                ${crumb.actor}: ${crumb.dialogue}
+                            </span>`;
+                        } else {
+                            // Previous dialogues - clickable
+                            html += `<span class="breadcrumb-item">
+                                <a href="#" onclick="navigateToBreadcrumb(${index})" style="color: #6200ea; text-decoration: none;">
+                                    ${crumb.actor}: ${crumb.dialogue}
+                                </a>
+                            </span>`;
+                            html += '<span class="breadcrumb-separator">→</span>';
+                        }
+                    });
+                    html += '</div>';
+                }
+                
+                html += `<div style="background-color: #1e1e1e; padding: 10px; border-radius: 5px; margin-bottom: 15px;">
+                    <strong>Selected:</strong> ${actor}<br>
+                    <em>${dialogue.substring(0, 100)}${dialogue.length > 100 ? '...' : ''}</em>
+                </div>`;
+                  // Show skill checks with outcomes
+                if (data.checks && data.checks.length > 0) {
+                    html += '<div class="connections-section"><h4>Skill Checks</h4>';
+                    data.checks.forEach(check => {
+                        const checkType = check.isred ? 'red' : 'white';
+                        const checkClass = check.isred ? 'skill-check red' : 'skill-check white';
+                        html += `<div class="connection-item">
+                            <span class="${checkClass}">${check.skilltype}</span> - Difficulty ${check.difficulty}
+                            ${check.flagname ? `<br><small>Flag: ${check.flagname}</small>` : ''}
+                        </div>`;
+                        
+                        // Show skill check outcomes if available
+                        if (data.skill_outcomes) {
+                            const relatedOutcomes = data.skill_outcomes.filter(outcome => 
+                                outcome.check_flag === check.flagname
+                            );
+                            
+                            if (relatedOutcomes.length > 0) {
+                                html += '<div style="margin-left: 15px; margin-top: 8px;">';
+                                html += '<div style="font-size: 12px; color: #aaa; margin-bottom: 4px;">Possible Outcomes:</div>';
+                                
+                                const successOutcomes = relatedOutcomes.filter(o => o.outcome_type === 'SUCCESS');
+                                const failureOutcomes = relatedOutcomes.filter(o => o.outcome_type === 'FAILURE');
+                                
+                                if (successOutcomes.length > 0) {
+                                    html += '<div style="margin-bottom: 6px;">';
+                                    html += '<span style="background-color: #4caf50; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">SUCCESS</span>';
+                                    successOutcomes.forEach(outcome => {
+                                        html += `<div class="clickable-dialogue" onclick="navigateToDialogue(${outcome.conversationid}, ${outcome.dialogueid}, '${outcome.actor.replace(/'/g, "\\'")}', '${outcome.dialogue.replace(/'/g, "\\'")}')" style="margin-left: 10px; margin-top: 4px; font-size: 12px; color: #ccc;">
+                                            <strong>${outcome.actor}:</strong> ${outcome.dialogue.substring(0, 80)}${outcome.dialogue.length > 80 ? '...' : ''} <span style="color: #888;">→</span>
+                                        </div>`;
+                                    });
+                                    html += '</div>';
+                                }
+                                
+                                if (failureOutcomes.length > 0) {
+                                    html += '<div>';
+                                    html += '<span style="background-color: #f44336; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">FAILURE</span>';
+                                    failureOutcomes.forEach(outcome => {
+                                        html += `<div class="clickable-dialogue" onclick="navigateToDialogue(${outcome.conversationid}, ${outcome.dialogueid}, '${outcome.actor.replace(/'/g, "\\'")}', '${outcome.dialogue.replace(/'/g, "\\'")}')" style="margin-left: 10px; margin-top: 4px; font-size: 12px; color: #ccc;">
+                                            <strong>${outcome.actor}:</strong> ${outcome.dialogue.substring(0, 80)}${outcome.dialogue.length > 80 ? '...' : ''} <span style="color: #888;">→</span>
+                                        </div>`;
+                                    });
+                                    html += '</div>';
+                                }
+                                
+                                html += '</div>';
+                            }
+                        }
+                    });
+                    html += '</div>';
+                }
+                
+                // Show alternates
+                if (data.alternates && data.alternates.length > 0) {
+                    html += '<div class="connections-section"><h4>Alternate Text</h4>';
+                    data.alternates.forEach(alt => {
+                        html += `<div class="connection-item">
+                            <div class="alternate-condition">Condition: ${alt.condition}</div>
+                            <div>"${alt.alternateline}"</div>
+                        </div>`;
+                    });
+                    html += '</div>';
+                }
+                  // Show connected dialogues (filter out empty/system entries)
+                if (data.connected && data.connected.length > 0) {
+                    const meaningfulConnections = data.connected.filter(conn => 
+                        conn.dialogue.trim() !== '0' && 
+                        conn.dialogue.trim() !== '' && 
+                        conn.dialogue.length > 3
+                    );
+                    
+                    // Also show system connectors that might be part of skill check flow
+                    const systemConnectors = data.connected.filter(conn => 
+                        conn.dialogue.trim() === '0' && 
+                        conn.condition && 
+                        conn.condition.length > 0
+                    );
+                    
+                    if (meaningfulConnections.length > 0) {
+                        html += '<div class="connections-section"><h4>What Happens Next</h4>';
+                        meaningfulConnections.forEach((conn, index) => {
+                            const connectorType = conn.isconnector ? 'AUTO' : 'CHOICE';
+                            const checkIndicator = conn.hascheck ? ' 🎲' : '';
+                            let conditionInfo = '';
+                            if (conn.condition && conn.condition.length > 0 && conn.condition !== 'null') {
+                                conditionInfo = `<div style="font-size: 10px; color: #888; margin-top: 2px;">Condition: ${conn.condition.substring(0, 80)}${conn.condition.length > 80 ? '...' : ''}</div>`;
+                            }
+                            html += `<div class="connection-item clickable-dialogue" onclick="navigateToDialogue(${conn.destinationconversationid}, ${conn.destinationdialogueid}, '${conn.actor.replace(/'/g, "\\'")}', '${conn.dialogue.replace(/'/g, "\\'").substring(0, 200)}')">
+                                <div class="connection-actor">[${connectorType}] ${conn.actor}${checkIndicator}</div>
+                                <div>${conn.dialogue.substring(0, 120)}${conn.dialogue.length > 120 ? '...' : ''}</div>
+                                ${conditionInfo}
+                                <div style="font-size: 11px; color: #888; margin-top: 4px;">Click to continue →</div>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+                    
+                    // Show system connectors for debugging
+                    if (systemConnectors.length > 0) {
+                        html += '<div class="connections-section"><h4>System Connectors (Debug)</h4>';
+                        systemConnectors.forEach((conn, index) => {
+                            html += `<div class="connection-item" style="background-color: #2a2a2a; border-left: 3px solid #ff9800;">
+                                <div style="font-size: 11px; color: #ff9800; font-weight: bold;">SYSTEM CONNECTOR</div>
+                                <div style="font-size: 12px; color: #ccc;">Actor: ${conn.actor}</div>
+                                <div style="font-size: 11px; color: #aaa; margin-top: 4px;">Condition: ${conn.condition}</div>
+                                <div style="font-size: 10px; color: #666; margin-top: 2px;">Destination: ${conn.destinationconversationid}:${conn.destinationdialogueid}</div>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+                }
+                  if (!data.checks.length && !data.alternates.length && !data.skill_outcomes.length && (!data.connected.length || !data.connected.filter(conn => conn.dialogue.trim() !== '0' && conn.dialogue.trim() !== '' && conn.dialogue.length > 3).length)) {
+                    html += '<div style="color: #aaa; font-style: italic;">No connections, skill checks, or alternates found for this dialogue.</div>';
+                }
+                
+                content.innerHTML = html;
+                panel.style.display = 'block';
+                panel.scrollIntoView({ behavior: 'smooth' });
+                
+            } catch (error) {
+                console.error('Error fetching dialogue connections:', error);
+            }
+        }
+
+        function navigateToDialogue(conversationId, dialogueId, actor, dialogue) {
+            showDialogueConnections(conversationId, dialogueId, actor, dialogue);
+        }        function navigateToBreadcrumb(index) {
+            // Trim breadcrumb to the selected point + 1 (include the clicked item)
+            dialogueBreadcrumb = dialogueBreadcrumb.slice(0, index + 1);
+            const crumb = dialogueBreadcrumb[index];
+            
+            // Show the connections for the selected breadcrumb item
+            showDialogueConnections(crumb.conversationId, crumb.dialogueId, crumb.actor, crumb.fullDialogue || crumb.dialogue, true);
+        }
+
+        async function exploreDialogueTree() {
+            if (!currentDialogueContext) {
+                alert('No dialogue selected for tree exploration');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/explore-dialogue-tree?conversationid=${currentDialogueContext.conversationId}&dialogueid=${currentDialogueContext.dialogueId}&depth=6`);
+                const tree = await response.json();
+                
+                // Display tree in a modal or expanded view
+                showDialogueTreeModal(tree);
+            } catch (error) {
+                console.error('Error exploring dialogue tree:', error);
+                alert('Error exploring dialogue tree');
+            }
+        }
+
+        function showDialogueTreeModal(tree) {
+            // Create modal overlay
+            const modal = document.createElement('div');
+            modal.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto;
+                display: flex; align-items: center; justify-content: center;
+            `;
+            
+            const modalContent = document.createElement('div');
+            modalContent.style.cssText = `
+                background: #1e1e1e; border-radius: 10px; padding: 20px; 
+                max-width: 90%; max-height: 90%; overflow-y: auto;
+                border: 2px solid #6200ea;
+            `;
+              modalContent.innerHTML = `
+                <div style="margin-bottom: 15px;">
+                    <h3 style="margin: 0; color: #6200ea;">Dialogue Tree Explorer</h3>
+                </div>
+                <div id="tree-content">${renderTreeNode(tree, 0)}</div>
+            `;
+            
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+            
+            // Close on outside click
+            modal.onclick = (e) => {
+                if (e.target === modal) modal.remove();
+            };
+        }
+
+        function renderTreeNode(node, depth) {
+            if (!node) return '';
+            
+            const indent = '　'.repeat(depth); // Use full-width space for indentation
+            const isSystemConnector = node.dialogue === '0';
+            const hasSkillCheck = node.skill_check;
+            
+            let html = `<div style="margin: 8px 0; padding: 8px; background: ${isSystemConnector ? '#2a2a2a' : '#333'}; border-radius: 5px; border-left: 3px solid ${hasSkillCheck ? '#ff5722' : '#6200ea'};">`;
+            
+            html += `<div style="font-size: 12px; color: #aaa;">${indent}${depth > 0 ? '└─ ' : ''}`;
+            
+            if (isSystemConnector) {
+                html += `<span style="color: #ff9800; font-weight: bold;">[SYSTEM CONNECTOR]</span>`;
+                if (node.condition) {
+                    html += `<br>${indent}   Condition: <span style="color: #ccc; font-family: monospace; font-size: 11px;">${node.condition}</span>`;
+                }
+            } else {
+                html += `<span style="color: #e0e0e0; font-weight: bold;">${node.actor}:</span> `;
+                html += `<span style="color: #ccc;">${node.dialogue.substring(0, 100)}${node.dialogue.length > 100 ? '...' : ''}</span>`;
+                
+                if (hasSkillCheck) {
+                    const check = node.skill_check;
+                    const checkClass = check.isred ? 'background: #f44336;' : 'background: #fff; color: #333;';
+                    html += `<br>${indent}   <span style="${checkClass} padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-top: 4px; display: inline-block;">${check.skilltype} ${check.difficulty}</span>`;
+                }
+                  if (node.condition && node.condition !== 'null') {
+                    html += `<br>${indent}   <span style="color: #888; font-size: 10px;">Condition: ${node.condition.substring(0, 60)}</span>`;
+                }
+            }
+            
+            html += '</div>';
+            
+            // Render children
+            if (node.children && node.children.length > 0) {
+                node.children.forEach(child => {
+                    html += renderTreeNode(child, depth + 1);
+                });
+            }
+            
+            html += '</div>';
+            return html;
         }
 
         fetchActors();
