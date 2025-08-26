@@ -374,7 +374,7 @@ document.addEventListener("DOMContentLoaded", function() {
             document.getElementById('actor-search').value = actor;
             document.getElementById('actor-list').style.display = 'none';
         }
-                    
+
         async function searchDialogues() {
             const actor = document.getElementById('actor-search').value;
             const keyword = document.getElementById('keyword').value;
@@ -473,10 +473,12 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (data.checks && data.checks.length > 0) {
                     html += '<div class="connections-section"><h4>Skill Checks</h4>';
                     data.checks.forEach(check => {
-                        const checkType = check.isred ? 'red' : 'white';
-                        const checkClass = check.isred ? 'skill-check red' : 'skill-check white';
+                        const checkType = check.isred ? 'red' : 'white';                        const checkClass = check.isred ? 'skill-check red' : 'skill-check white';
+                        const difficultyDisplay = check.actual_difficulty ? 
+                            `${check.actual_difficulty} (${check.difficulty_label})` : 
+                            check.difficulty;
                         html += `<div class="connection-item">
-                            <span class="${checkClass}">${check.skilltype}</span> - Difficulty ${check.difficulty}
+                            <span class="${checkClass}">${check.skilltype}</span> - Difficulty ${difficultyDisplay}
                             ${check.flagname ? `<br><small>Flag: ${check.flagname}</small>` : ''}
                         </div>`;
                         
@@ -677,7 +679,10 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (hasSkillCheck) {
                     const check = node.skill_check;
                     const checkClass = check.isred ? 'background: #f44336;' : 'background: #fff; color: #333;';
-                    html += `<br>${indent}   <span style="${checkClass} padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-top: 4px; display: inline-block;">${check.skilltype} ${check.difficulty}</span>`;
+                    const difficultyDisplay = check.actual_difficulty ? 
+                        `${check.skilltype} ${check.actual_difficulty} (${check.difficulty_label})` : 
+                        `${check.skilltype} ${check.difficulty}`;
+                    html += `<br>${indent}   <span style="${checkClass} padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-top: 4px; display: inline-block;">${difficultyDisplay}</span>`;
                 }
                   if (node.condition && node.condition !== 'null') {
                     html += `<br>${indent}   <span style="color: #888; font-size: 10px;">Condition: ${node.condition.substring(0, 60)}</span>`;

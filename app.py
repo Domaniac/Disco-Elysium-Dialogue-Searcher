@@ -10,6 +10,36 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def get_actual_difficulty_and_label(db_difficulty):
+    """
+    Convert database difficulty to actual game difficulty and label.
+    Based on the mapping found in conversation 1428 in the database.
+    """
+    # The actual mapping from the database
+    difficulty_mapping = {
+        0: (6, "Trivial"),
+        1: (8, "Easy"), 
+        2: (10, "Normal"),
+        3: (12, "Challenging"),
+        4: (14, "Difficult"),
+        5: (16, "Very Difficult"),
+        6: (18, "Heroic"),
+        7: (20, "Impossible"),
+        8: (7, "Easy"),
+        9: (9, "Normal"),
+        10: (11, "Challenging"),
+        11: (13, "Difficult"),
+        12: (15, "Very Difficult"),
+        13: (17, "Heroic"),
+        14: (19, "Impossible")
+    }
+    
+    if db_difficulty in difficulty_mapping:
+        return difficulty_mapping[db_difficulty]
+    else:
+        # Fallback for unknown values
+        return (db_difficulty, "Unknown")
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -156,10 +186,19 @@ def get_dialogue_connections():
                     })
     
     conn.close()
+    def format_check(row):
+        actual_difficulty, difficulty_label = get_actual_difficulty_and_label(row['difficulty'])
+        return {
+            'difficulty': row['difficulty'], 
+            'actual_difficulty': actual_difficulty,
+            'difficulty_label': difficulty_label,
+            'skilltype': row['skilltype'], 
+            'isred': bool(row['isred']), 
+            'flagname': row['flagname']
+        }
     
     data = {
-        'checks': [{'difficulty': row['difficulty'], 'skilltype': row['skilltype'], 
-                   'isred': bool(row['isred']), 'flagname': row['flagname']} for row in checks],
+        'checks': [format_check(row) for row in checks],
         'alternates': [{'condition': row['condition'], 'alternateline': row['alternateline']} for row in alternates],
         'connected': [{'actor': row['actor'], 'dialogue': row['dialoguetext'], 
                       'hascheck': bool(row['hascheck']), 'isconnector': bool(row['isConnector']),
@@ -259,10 +298,12 @@ def explore_dialogue_tree():
                 FROM checks 
                 WHERE conversationid = ? AND dialogueid = ?
             """, (conv_id, dlg_id)).fetchone()
-            
             if check:
+                actual_difficulty, difficulty_label = get_actual_difficulty_and_label(check['difficulty'])
                 node['skill_check'] = {
                     'difficulty': check['difficulty'],
+                    'actual_difficulty': actual_difficulty,
+                    'difficulty_label': difficulty_label,
                     'skilltype': check['skilltype'],
                     'isred': bool(check['isred']),
                     'flagname': check['flagname']
