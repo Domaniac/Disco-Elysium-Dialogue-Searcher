@@ -607,18 +607,20 @@ document.addEventListener("DOMContentLoaded", function() {
             
             // Show the connections for the selected breadcrumb item
             showDialogueConnections(crumb.conversationId, crumb.dialogueId, crumb.actor, crumb.fullDialogue || crumb.dialogue, true);
-        }
-
-        async function exploreDialogueTree(expandDepth = false) {
+        }        
+        
+        async function exploreDialogueTree(depthChange = 0) {
             if (!currentDialogueContext) {
                 alert('No dialogue selected for tree exploration');
                 return;
             }
             
             try {
-                // If expanding depth, increment by 3 levels
-                if (expandDepth) {
-                    currentTreeDepth += 3;
+                // Adjust depth based on the parameter
+                if (depthChange > 0) {
+                    currentTreeDepth += depthChange;
+                } else if (depthChange < 0) {
+                    currentTreeDepth = Math.max(3, currentTreeDepth + depthChange); // Minimum depth of 3
                 } else {
                     currentTreeDepth = 6; // Reset to default depth
                 }
@@ -662,11 +664,20 @@ document.addEventListener("DOMContentLoaded", function() {
                 <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
                     <h3 style="margin: 0; color: #6200ea;">Dialogue Tree Explorer (Depth: ${currentTreeDepth})</h3>
                     <div>
-                        <button onclick="exploreDialogueTree(true)" style="
+                        <button onclick="exploreDialogueTree(-3)" style="
+                            background: #ff5722; color: white; border: none; padding: 8px 16px; 
+                            border-radius: 5px; cursor: pointer; margin-right: 10px;
+                            font-size: 12px; ${currentTreeDepth <= 3 ? 'opacity: 0.5; cursor: not-allowed;' : ''}
+                        " ${currentTreeDepth <= 3 ? 'disabled' : ''}>Reduce Depth (-3)</button>
+                        <button onclick="exploreDialogueTree(3)" style="
                             background: #6200ea; color: white; border: none; padding: 8px 16px; 
                             border-radius: 5px; cursor: pointer; margin-right: 10px;
                             font-size: 12px;
                         ">Expand Depth (+3)</button>
+                        <button onclick="document.querySelector('.dialogue-tree-modal').remove()" style="
+                            background: #424242; color: white; border: none; padding: 8px 16px; 
+                            border-radius: 5px; cursor: pointer; font-size: 12px;
+                        ">Close</button>
                     </div>
                 </div>
                 <div id="tree-content">${renderTreeNode(tree, 0)}</div>
