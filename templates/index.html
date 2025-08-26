@@ -276,6 +276,8 @@ document.addEventListener("DOMContentLoaded", function() {
         let allActorsWithCounts = [];
         let dialogueBreadcrumb = [];
         let currentDialogueContext = null; // Store current dialogue context
+        let currentTreeData = null; // Store current tree data for expansion
+        let currentTreeDepth = 6; // Track current depth for expansion
 
         async function fetchActors() {
             const response = await fetch('/get-actors');
@@ -607,15 +609,25 @@ document.addEventListener("DOMContentLoaded", function() {
             showDialogueConnections(crumb.conversationId, crumb.dialogueId, crumb.actor, crumb.fullDialogue || crumb.dialogue, true);
         }
 
-        async function exploreDialogueTree() {
+        async function exploreDialogueTree(expandDepth = false) {
             if (!currentDialogueContext) {
                 alert('No dialogue selected for tree exploration');
                 return;
             }
             
             try {
-                const response = await fetch(`/explore-dialogue-tree?conversationid=${currentDialogueContext.conversationId}&dialogueid=${currentDialogueContext.dialogueId}&depth=6`);
+                // If expanding depth, increment by 3 levels
+                if (expandDepth) {
+                    currentTreeDepth += 3;
+                } else {
+                    currentTreeDepth = 6; // Reset to default depth
+                }
+                
+                const response = await fetch(`/explore-dialogue-tree?conversationid=${currentDialogueContext.conversationId}&dialogueid=${currentDialogueContext.dialogueId}&depth=${currentTreeDepth}`);
                 const tree = await response.json();
+                
+                // Store tree data for potential expansion
+                currentTreeData = tree;
                 
                 // Display tree in a modal or expanded view
                 showDialogueTreeModal(tree);
@@ -623,11 +635,16 @@ document.addEventListener("DOMContentLoaded", function() {
                 console.error('Error exploring dialogue tree:', error);
                 alert('Error exploring dialogue tree');
             }
-        }
-
-        function showDialogueTreeModal(tree) {
+        }        function showDialogueTreeModal(tree) {
+            // Remove existing modal if present
+            const existingModal = document.querySelector('.dialogue-tree-modal');
+            if (existingModal) {
+                existingModal.remove();
+            }
+            
             // Create modal overlay
             const modal = document.createElement('div');
+            modal.className = 'dialogue-tree-modal';
             modal.style.cssText = `
                 position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
                 background: rgba(0,0,0,0.8); z-index: 1000; overflow-y: auto;
@@ -637,12 +654,20 @@ document.addEventListener("DOMContentLoaded", function() {
             const modalContent = document.createElement('div');
             modalContent.style.cssText = `
                 background: #1e1e1e; border-radius: 10px; padding: 20px; 
-                max-width: 90%; max-height: 90%; overflow-y: auto;
-                border: 2px solid #6200ea;
+                max-width: 95%; max-height: 95%; overflow-y: auto;
+                border: 2px solid #6200ea; min-width: 800px;
             `;
-              modalContent.innerHTML = `
-                <div style="margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: #6200ea;">Dialogue Tree Explorer</h3>
+            
+            modalContent.innerHTML = `
+                <div style="margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center;">
+                    <h3 style="margin: 0; color: #6200ea;">Dialogue Tree Explorer (Depth: ${currentTreeDepth})</h3>
+                    <div>
+                        <button onclick="exploreDialogueTree(true)" style="
+                            background: #6200ea; color: white; border: none; padding: 8px 16px; 
+                            border-radius: 5px; cursor: pointer; margin-right: 10px;
+                            font-size: 12px;
+                        ">Expand Depth (+3)</button>
+                    </div>
                 </div>
                 <div id="tree-content">${renderTreeNode(tree, 0)}</div>
             `;
@@ -654,8 +679,7 @@ document.addEventListener("DOMContentLoaded", function() {
             modal.onclick = (e) => {
                 if (e.target === modal) modal.remove();
             };
-        }
-
+        }        
         function renderTreeNode(node, depth) {
             if (!node) return '';
             
@@ -665,16 +689,17 @@ document.addEventListener("DOMContentLoaded", function() {
             
             let html = `<div style="margin: 8px 0; padding: 8px; background: ${isSystemConnector ? '#2a2a2a' : '#333'}; border-radius: 5px; border-left: 3px solid ${hasSkillCheck ? '#ff5722' : '#6200ea'};">`;
             
-            html += `<div style="font-size: 12px; color: #aaa;">${indent}${depth > 0 ? '└─ ' : ''}`;
+            html += `<div style="font-size: 12px; color: #aaa; word-wrap: break-word; white-space: pre-wrap;">${indent}${depth > 0 ? '└─ ' : ''}`;
             
             if (isSystemConnector) {
                 html += `<span style="color: #ff9800; font-weight: bold;">[SYSTEM CONNECTOR]</span>`;
                 if (node.condition) {
-                    html += `<br>${indent}   Condition: <span style="color: #ccc; font-family: monospace; font-size: 11px;">${node.condition}</span>`;
+                    html += `<br>${indent}   Condition: <span style="color: #ccc; font-family: monospace; font-size: 11px; word-wrap: break-word;">${node.condition}</span>`;
                 }
             } else {
                 html += `<span style="color: #e0e0e0; font-weight: bold;">${node.actor}:</span> `;
-                html += `<span style="color: #ccc;">${node.dialogue.substring(0, 100)}${node.dialogue.length > 100 ? '...' : ''}</span>`;
+                // Remove text truncation - show full dialogue with proper wrapping
+                html += `<span style="color: #ccc; word-wrap: break-word; white-space: pre-wrap; display: inline-block; max-width: 100%;">${node.dialogue}</span>`;
                 
                 if (hasSkillCheck) {
                     const check = node.skill_check;
@@ -684,8 +709,10 @@ document.addEventListener("DOMContentLoaded", function() {
                         `${check.skilltype} ${check.difficulty}`;
                     html += `<br>${indent}   <span style="${checkClass} padding: 2px 6px; border-radius: 3px; font-size: 11px; margin-top: 4px; display: inline-block;">${difficultyDisplay}</span>`;
                 }
-                  if (node.condition && node.condition !== 'null') {
-                    html += `<br>${indent}   <span style="color: #888; font-size: 10px;">Condition: ${node.condition.substring(0, 60)}</span>`;
+                
+                if (node.condition && node.condition !== 'null') {
+                    // Show full condition text with proper wrapping
+                    html += `<br>${indent}   <span style="color: #888; font-size: 10px; word-wrap: break-word; white-space: pre-wrap;">Condition: ${node.condition}</span>`;
                 }
             }
             
