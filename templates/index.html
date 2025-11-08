@@ -223,11 +223,14 @@
         <input type="text" id="actor-search" placeholder="Type to search actors" onkeyup="filterActors()">
         <div id="actor-list"></div>
         
-        <label for="keyword">Dialogue Keyword:</label>
-        <input type="text" id="keyword" placeholder="Enter keyword">
+        <label for="keyword">Dialogue Search:</label>
+        <input type="text" id="keyword" placeholder="Enter phrase or keywords">
         
         <div class="button-row">
-            <button onclick="searchDialogues()">Search</button>
+            <button onclick="searchDialogues('phrase')">Phrase Search</button>
+            <button onclick="searchDialogues('keywords')" style="background-color: #ff6f00;">Keyword Search (Space Delimiter)</button>
+        </div>
+        <div class="button-row">
             <button class="secondary-button" onclick="toggleActorBrowser()">List of Actors</button>
         </div>
         
@@ -261,12 +264,11 @@
 document.addEventListener("DOMContentLoaded", function() {
     const actorInput = document.getElementById('actor-search');
     const keywordInput = document.getElementById('keyword');
-    const searchButton = document.querySelector('button');
 
     // Add event listener to both input fields
     function handleKeyPress(event) {
         if (event.key === 'Enter') {
-            searchButton.click(); // Trigger the search button click
+            searchDialogues('phrase'); // Default to phrase search on Enter
         }
     }
 
@@ -377,18 +379,28 @@ document.addEventListener("DOMContentLoaded", function() {
             document.getElementById('actor-list').style.display = 'none';
         }
 
-        async function searchDialogues() {
+        async function searchDialogues(mode = 'phrase') {
             const actor = document.getElementById('actor-search').value;
             const keyword = document.getElementById('keyword').value;
             
             // Properly encode URL parameters to handle special characters like commas and hash symbols
             const encodedActor = encodeURIComponent(actor);
             const encodedKeyword = encodeURIComponent(keyword);
+            const encodedMode = encodeURIComponent(mode);
             
-            const response = await fetch(`/search-dialogues?actor=${encodedActor}&keyword=${encodedKeyword}`);
+            const response = await fetch(`/search-dialogues?actor=${encodedActor}&keyword=${encodedKeyword}&mode=${encodedMode}`);
             const data = await response.json();
             const tbody = document.getElementById('results').querySelector('tbody');
             tbody.innerHTML = '';
+            
+            // Add search mode indicator at the top of results
+            if (data.length > 0) {
+                const modeIndicator = document.createElement('tr');
+                modeIndicator.innerHTML = `<td colspan="2" style="background-color: ${mode === 'keywords' ? '#ff6f00' : '#6200ea'}; text-align: center; font-size: 12px; padding: 5px;">
+                    ${mode === 'keywords' ? `🔍 Keyword Search: Found ${data.length} results containing all keywords` : `📝 Phrase Search: Found ${data.length} results`}
+                </td>`;
+                tbody.appendChild(modeIndicator);
+            }
             
             data.forEach(row => {
                 const tr = document.createElement('tr');

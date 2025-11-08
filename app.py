@@ -214,29 +214,66 @@ def get_dialogue_connections():
 def search_dialogues():
     actor = request.args.get('actor', '').strip()
     keyword = request.args.get('keyword', '')
+    search_mode = request.args.get('mode', 'phrase')  # 'phrase' or 'keywords'
     conn = get_db_connection()
     
-    if not actor:
-        # If actor is empty, search across all actors
-        query = """
-            SELECT actors.name AS actor, actors.id AS actorid, dentries.dialoguetext AS dialogue,
-                   dentries.conversationid, dentries.id as dialogueid, dentries.hascheck, dentries.hasalts
-            FROM dentries 
-            JOIN actors ON dentries.actor = actors.id
-            WHERE dentries.dialoguetext LIKE ?
-        """
-        results = conn.execute(query, (f"%{keyword}%",)).fetchall()
+    if not keyword:
+        # If no keyword provided, return empty results
+        conn.close()
+        return jsonify([])
+    
+    if search_mode == 'keywords':
+        # Multi-keyword search: split and match ALL keywords
+        keywords = [k.strip() for k in keyword.replace(',', ' ').split() if k.strip()]
+        
+        if not keywords:
+            conn.close()
+            return jsonify([])
+        
+        # Build the WHERE clause to match ALL keywords (AND logic)
+        keyword_conditions = ' AND '.join(['dentries.dialoguetext LIKE ?' for _ in keywords])
+        keyword_params = [f"%{k}%" for k in keywords]
+        
+        if not actor:
+            query = f"""
+                SELECT actors.name AS actor, actors.id AS actorid, dentries.dialoguetext AS dialogue,
+                       dentries.conversationid, dentries.id as dialogueid, dentries.hascheck, dentries.hasalts
+                FROM dentries 
+                JOIN actors ON dentries.actor = actors.id
+                WHERE {keyword_conditions}
+            """
+            results = conn.execute(query, keyword_params).fetchall()
+        else:
+            query = f"""
+                SELECT actors.name AS actor, actors.id AS actorid, dentries.dialoguetext AS dialogue,
+                       dentries.conversationid, dentries.id as dialogueid, dentries.hascheck, dentries.hasalts
+                FROM dentries 
+                JOIN actors ON dentries.actor = actors.id
+                WHERE TRIM(actors.name) = TRIM(?) COLLATE NOCASE 
+                AND {keyword_conditions}
+            """
+            results = conn.execute(query, (actor, *keyword_params)).fetchall()
     else:
-        # If actor is specified, filter by actor
-        query = """
-            SELECT actors.name AS actor, actors.id AS actorid, dentries.dialoguetext AS dialogue,
-                   dentries.conversationid, dentries.id as dialogueid, dentries.hascheck, dentries.hasalts
-            FROM dentries 
-            JOIN actors ON dentries.actor = actors.id
-            WHERE TRIM(actors.name) = TRIM(?) COLLATE NOCASE 
-            AND dentries.dialoguetext LIKE ?
-        """
-        results = conn.execute(query, (actor, f"%{keyword}%")).fetchall()
+        # Phrase search: match the exact phrase/sentence
+        if not actor:
+            query = """
+                SELECT actors.name AS actor, actors.id AS actorid, dentries.dialoguetext AS dialogue,
+                       dentries.conversationid, dentries.id as dialogueid, dentries.hascheck, dentries.hasalts
+                FROM dentries 
+                JOIN actors ON dentries.actor = actors.id
+                WHERE dentries.dialoguetext LIKE ?
+            """
+            results = conn.execute(query, (f"%{keyword}%",)).fetchall()
+        else:
+            query = """
+                SELECT actors.name AS actor, actors.id AS actorid, dentries.dialoguetext AS dialogue,
+                       dentries.conversationid, dentries.id as dialogueid, dentries.hascheck, dentries.hasalts
+                FROM dentries 
+                JOIN actors ON dentries.actor = actors.id
+                WHERE TRIM(actors.name) = TRIM(?) COLLATE NOCASE 
+                AND dentries.dialoguetext LIKE ?
+            """
+            results = conn.execute(query, (actor, f"%{keyword}%")).fetchall()
     
     conn.close()
     data = [{'actor': row['actor'], 'dialogue': row['dialogue'], 
