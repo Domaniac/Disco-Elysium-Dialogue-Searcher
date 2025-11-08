@@ -417,8 +417,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 
                 tr.innerHTML = `<td>${row.actor}</td><td>${row.dialogue}${indicators ? '<br>' + indicators : ''}</td>`;
                 
-                // Make row clickable to show connections
-                tr.onclick = () => showDialogueConnections(row.conversationid, row.dialogueid, row.actor, row.dialogue);
+                // Make row clickable to show connections (resets breadcrumb)
+                tr.onclick = () => navigateToDialogue(row.conversationid, row.dialogueid, row.actor, row.dialogue);
                 
                 tbody.appendChild(tr);
             });
@@ -459,7 +459,7 @@ document.addEventListener("DOMContentLoaded", function() {
                   // Add breadcrumb navigation
                 if (dialogueBreadcrumb.length > 1) {
                     html += '<div class="breadcrumb">';
-                    html += '<strong>Navigation Path:</strong> ';
+                    html += '<strong>Dialogue Navigation Path:</strong> ';
                     dialogueBreadcrumb.forEach((crumb, index) => {
                         if (index === dialogueBreadcrumb.length - 1) {
                             // Current dialogue - not clickable
@@ -473,7 +473,7 @@ document.addEventListener("DOMContentLoaded", function() {
                                     ${crumb.actor}: ${crumb.dialogue}
                                 </a>
                             </span>`;
-                            html += '<span class="breadcrumb-separator">→</span>';
+                            html += '<span class="breadcrumb-separator">←</span>';
                         }
                     });
                     html += '</div>';
@@ -500,7 +500,7 @@ document.addEventListener("DOMContentLoaded", function() {
                             if (prev.condition && prev.condition.length > 0 && prev.condition !== 'null') {
                                 conditionInfo = `<div style="font-size: 10px; color: #888; margin-top: 2px;">Condition: ${prev.condition.substring(0, 80)}${prev.condition.length > 80 ? '...' : ''}</div>`;
                             }
-                            html += `<div class="connection-item clickable-dialogue" onclick="navigateToDialogue(${prev.originconversationid}, ${prev.origindialogueid}, '${prev.actor.replace(/'/g, "\\'")}', '${prev.dialogue.replace(/'/g, "\\'").substring(0, 200)}')" style="background-color: #1a3a3a; border-left: 3px solid #03dac6;">
+                            html += `<div class="connection-item clickable-dialogue" onclick="navigateToPreviousDialogue(${prev.originconversationid}, ${prev.origindialogueid}, '${prev.actor.replace(/'/g, "\\'")}', '${prev.dialogue.replace(/'/g, "\\'").substring(0, 200)}')" style="background-color: #1a3a3a; border-left: 3px solid #03dac6;">
                                 <div class="connection-actor">${prev.actor}${checkIndicator}</div>
                                 <div>${prev.dialogue.substring(0, 120)}${prev.dialogue.length > 120 ? '...' : ''}</div>
                                 ${conditionInfo}
@@ -576,56 +576,10 @@ document.addEventListener("DOMContentLoaded", function() {
                     });
                     html += '</div>';
                 }
-                  // Show connected dialogues (filter out empty/system entries)
-                if (data.connected && data.connected.length > 0) {
-                    const meaningfulConnections = data.connected.filter(conn => 
-                        conn.dialogue.trim() !== '0' && 
-                        conn.dialogue.trim() !== '' && 
-                        conn.dialogue.length > 3
-                    );
-                    
-                    // Also show system connectors that might be part of skill check flow
-                    const systemConnectors = data.connected.filter(conn => 
-                        conn.dialogue.trim() === '0' && 
-                        conn.condition && 
-                        conn.condition.length > 0
-                    );
-                    
-                    if (meaningfulConnections.length > 0) {
-                        html += '<div class="connections-section"><h4>What Happens Next</h4>';
-                        meaningfulConnections.forEach((conn, index) => {
-                            const connectorType = conn.isconnector ? 'AUTO' : 'CHOICE';
-                            const checkIndicator = conn.hascheck ? ' 🎲' : '';
-                            let conditionInfo = '';
-                            if (conn.condition && conn.condition.length > 0 && conn.condition !== 'null') {
-                                conditionInfo = `<div style="font-size: 10px; color: #888; margin-top: 2px;">Condition: ${conn.condition.substring(0, 80)}${conn.condition.length > 80 ? '...' : ''}</div>`;
-                            }
-                            html += `<div class="connection-item clickable-dialogue" onclick="navigateToDialogue(${conn.destinationconversationid}, ${conn.destinationdialogueid}, '${conn.actor.replace(/'/g, "\\'")}', '${conn.dialogue.replace(/'/g, "\\'").substring(0, 200)}')">
-                                <div class="connection-actor">[${connectorType}] ${conn.actor}${checkIndicator}</div>
-                                <div>${conn.dialogue.substring(0, 120)}${conn.dialogue.length > 120 ? '...' : ''}</div>
-                                ${conditionInfo}
-                                <div style="font-size: 11px; color: #888; margin-top: 4px;">Click to continue →</div>
-                            </div>`;
-                        });
-                        html += '</div>';
+                  if (!data.previous || data.previous.length === 0) {
+                    if (!data.checks.length && !data.alternates.length && !data.skill_outcomes.length) {
+                        html += '<div style="color: #aaa; font-style: italic;">No previous dialogues, skill checks, or alternates found for this dialogue.</div>';
                     }
-                    
-                    // Show system connectors for debugging
-                    if (systemConnectors.length > 0) {
-                        html += '<div class="connections-section"><h4>System Connectors (Debug)</h4>';
-                        systemConnectors.forEach((conn, index) => {
-                            html += `<div class="connection-item" style="background-color: #2a2a2a; border-left: 3px solid #ff9800;">
-                                <div style="font-size: 11px; color: #ff9800; font-weight: bold;">SYSTEM CONNECTOR</div>
-                                <div style="font-size: 12px; color: #ccc;">Actor: ${conn.actor}</div>
-                                <div style="font-size: 11px; color: #aaa; margin-top: 4px;">Condition: ${conn.condition}</div>
-                                <div style="font-size: 10px; color: #666; margin-top: 2px;">Destination: ${conn.destinationconversationid}:${conn.destinationdialogueid}</div>
-                            </div>`;
-                        });
-                        html += '</div>';
-                    }
-                }
-                  if (!data.checks.length && !data.alternates.length && !data.skill_outcomes.length && (!data.connected.length || !data.connected.filter(conn => conn.dialogue.trim() !== '0' && conn.dialogue.trim() !== '' && conn.dialogue.length > 3).length)) {
-                    html += '<div style="color: #aaa; font-style: italic;">No connections, skill checks, or alternates found for this dialogue.</div>';
                 }
                 
                 content.innerHTML = html;
@@ -638,8 +592,17 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         function navigateToDialogue(conversationId, dialogueId, actor, dialogue) {
+            // Reset breadcrumb when navigating to a new dialogue (not from "What Came Before")
+            dialogueBreadcrumb = [];
             showDialogueConnections(conversationId, dialogueId, actor, dialogue);
-        }        function navigateToBreadcrumb(index) {
+        }
+        
+        function navigateToPreviousDialogue(conversationId, dialogueId, actor, dialogue) {
+            // Preserve breadcrumb when navigating backward
+            showDialogueConnections(conversationId, dialogueId, actor, dialogue);
+        }
+        
+        function navigateToBreadcrumb(index) {
             // Trim breadcrumb to the selected point + 1 (include the clicked item)
             dialogueBreadcrumb = dialogueBreadcrumb.slice(0, index + 1);
             const crumb = dialogueBreadcrumb[index];
