@@ -233,10 +233,9 @@ def search_dialogues():
     search_mode = request.args.get('mode', 'phrase')  # 'phrase' or 'keywords'
     conn = get_db_connection()
     
+    # If no keyword provided, search for all entries
     if not keyword:
-        # If no keyword provided, return empty results
-        conn.close()
-        return jsonify([])
+        keyword = '%'
     
     if search_mode == 'keywords':
         # Multi-keyword search: split and match ALL keywords
