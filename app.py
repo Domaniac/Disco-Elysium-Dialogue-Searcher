@@ -80,6 +80,17 @@ def get_dialogue_connections():
     
     conn = get_db_connection()
     
+    # Get previous dialogues (ones that link TO this dialogue)
+    previous_dialogues = conn.execute("""
+        SELECT dl.originconversationid, dl.origindialogueid, dl.priority, dl.isConnector,
+               d.dialoguetext, a.name as actor, d.hascheck, d.conditionstring
+        FROM dlinks dl
+        JOIN dentries d ON dl.originconversationid = d.conversationid AND dl.origindialogueid = d.id
+        JOIN actors a ON d.actor = a.id
+        WHERE dl.destinationconversationid = ? AND dl.destinationdialogueid = ?
+        ORDER BY dl.priority DESC
+    """, (conversation_id, dialogue_id)).fetchall()
+    
     # Get skill checks
     checks = conn.execute("""
         SELECT difficulty, skilltype, isred, flagname
@@ -198,6 +209,11 @@ def get_dialogue_connections():
         }
     
     data = {
+        'previous': [{'actor': row['actor'], 'dialogue': row['dialoguetext'], 
+                     'hascheck': bool(row['hascheck']), 'isconnector': bool(row['isConnector']),
+                     'originconversationid': row['originconversationid'], 
+                     'origindialogueid': row['origindialogueid'],
+                     'condition': row['conditionstring']} for row in previous_dialogues],
         'checks': [format_check(row) for row in checks],
         'alternates': [{'condition': row['condition'], 'alternateline': row['alternateline']} for row in alternates],
         'connected': [{'actor': row['actor'], 'dialogue': row['dialoguetext'], 

@@ -483,6 +483,33 @@ document.addEventListener("DOMContentLoaded", function() {
                     <strong>Selected:</strong> ${actor}<br>
                     <em>${dialogue.substring(0, 100)}${dialogue.length > 100 ? '...' : ''}</em>
                 </div>`;
+                
+                // Show previous dialogues (what came before)
+                if (data.previous && data.previous.length > 0) {
+                    const meaningfulPrevious = data.previous.filter(prev => 
+                        prev.dialogue.trim() !== '0' && 
+                        prev.dialogue.trim() !== '' && 
+                        prev.dialogue.length > 3
+                    );
+                    
+                    if (meaningfulPrevious.length > 0) {
+                        html += '<div class="connections-section" style="border-left: 4px solid #03dac6;"><h4 style="color: #03dac6;">⬅️ What Came Before</h4>';
+                        meaningfulPrevious.forEach((prev, index) => {
+                            const checkIndicator = prev.hascheck ? ' 🎲' : '';
+                            let conditionInfo = '';
+                            if (prev.condition && prev.condition.length > 0 && prev.condition !== 'null') {
+                                conditionInfo = `<div style="font-size: 10px; color: #888; margin-top: 2px;">Condition: ${prev.condition.substring(0, 80)}${prev.condition.length > 80 ? '...' : ''}</div>`;
+                            }
+                            html += `<div class="connection-item clickable-dialogue" onclick="navigateToDialogue(${prev.originconversationid}, ${prev.origindialogueid}, '${prev.actor.replace(/'/g, "\\'")}', '${prev.dialogue.replace(/'/g, "\\'").substring(0, 200)}')" style="background-color: #1a3a3a; border-left: 3px solid #03dac6;">
+                                <div class="connection-actor">${prev.actor}${checkIndicator}</div>
+                                <div>${prev.dialogue.substring(0, 120)}${prev.dialogue.length > 120 ? '...' : ''}</div>
+                                ${conditionInfo}
+                                <div style="font-size: 11px; color: #03dac6; margin-top: 4px;">← Click to go back</div>
+                            </div>`;
+                        });
+                        html += '</div>';
+                    }
+                }
                   // Show skill checks with outcomes
                 if (data.checks && data.checks.length > 0) {
                     html += '<div class="connections-section"><h4>Skill Checks</h4>';
