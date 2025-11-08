@@ -36,6 +36,7 @@
             font-size: 16px;
             background-color: #333;
             color: #e0e0e0;
+            box-sizing: border-box;
         }
         input::placeholder {
             color: #aaa;
@@ -280,6 +281,7 @@ document.addEventListener("DOMContentLoaded", function() {
         let currentDialogueContext = null; // Store current dialogue context
         let currentTreeData = null; // Store current tree data for expansion
         let currentTreeDepth = 6; // Track current depth for expansion
+        let dialogueDataStore = {}; // Store dialogue data by unique ID to avoid HTML attribute issues
 
         async function fetchActors() {
             const response = await fetch('/get-actors');
@@ -430,13 +432,17 @@ document.addEventListener("DOMContentLoaded", function() {
             try {
                 // Update breadcrumb trail unless we're navigating back
                 if (!fromBreadcrumb) {
-                    // Truncate dialogue text for breadcrumb display
-                    const breadcrumbText = dialogue.length > 50 ? dialogue.substring(0, 50) + '...' : dialogue;
+                    // Truncate to approximately 100 words for breadcrumb
+                    const words = dialogue.split(/\s+/);
+                    const truncatedDialogue = words.length > 100 
+                        ? words.slice(0, 100).join(' ') + '...' 
+                        : dialogue;
+                    
                     dialogueBreadcrumb.push({ 
                         conversationId, 
                         dialogueId, 
                         actor, 
-                        dialogue: breadcrumbText,
+                        dialogue: truncatedDialogue,
                         fullDialogue: dialogue 
                     });
                     // Limit breadcrumb to 10 items to prevent it from getting too long
@@ -461,16 +467,20 @@ document.addEventListener("DOMContentLoaded", function() {
                     html += '<div class="breadcrumb">';
                     html += '<strong>Dialogue Navigation Path:</strong> ';
                     dialogueBreadcrumb.forEach((crumb, index) => {
+                        // Escape the text for safe HTML display
+                        const escapedActor = escapeHtml(crumb.actor);
+                        const escapedDialogue = escapeHtml(crumb.dialogue);
+                        
                         if (index === dialogueBreadcrumb.length - 1) {
                             // Current dialogue - not clickable
                             html += `<span class="breadcrumb-item" style="color: #fff; font-weight: bold;">
-                                ${crumb.actor}: ${crumb.dialogue}
+                                ${escapedActor}: ${escapedDialogue}
                             </span>`;
                         } else {
                             // Previous dialogues - clickable
                             html += `<span class="breadcrumb-item">
-                                <a href="#" onclick="navigateToBreadcrumb(${index})" style="color: #6200ea; text-decoration: none;">
-                                    ${crumb.actor}: ${crumb.dialogue}
+                                <a href="#" onclick="navigateToBreadcrumb(${index}); return false;" style="color: #6200ea; text-decoration: none;">
+                                    ${escapedActor}: ${escapedDialogue}
                                 </a>
                             </span>`;
                             html += '<span class="breadcrumb-separator">←</span>';
@@ -500,7 +510,13 @@ document.addEventListener("DOMContentLoaded", function() {
                             if (prev.condition && prev.condition.length > 0 && prev.condition !== 'null') {
                                 conditionInfo = `<div style="font-size: 10px; color: #888; margin-top: 2px;">Condition: ${prev.condition.substring(0, 80)}${prev.condition.length > 80 ? '...' : ''}</div>`;
                             }
-                            html += `<div class="connection-item clickable-dialogue" onclick="navigateToPreviousDialogue(${prev.originconversationid}, ${prev.origindialogueid}, '${prev.actor.replace(/'/g, "\\'")}', '${prev.dialogue.replace(/'/g, "\\'").substring(0, 200)}')" style="background-color: #1a3a3a; border-left: 3px solid #03dac6;">
+                            // Store dialogue data in global object
+                            const dataId = `prev_${prev.originconversationid}_${prev.origindialogueid}`;
+                            dialogueDataStore[dataId] = {
+                                actor: prev.actor,
+                                dialogue: prev.dialogue
+                            };
+                            html += `<div class="connection-item clickable-dialogue" onclick="navigateToPreviousDialogue(${prev.originconversationid}, ${prev.origindialogueid})" data-id="${dataId}" style="background-color: #1a3a3a; border-left: 3px solid #03dac6;">
                                 <div class="connection-actor">${prev.actor}${checkIndicator}</div>
                                 <div>${prev.dialogue.substring(0, 500)}${prev.dialogue.length > 500 ? '...' : ''}</div>
                                 ${conditionInfo}
@@ -540,7 +556,13 @@ document.addEventListener("DOMContentLoaded", function() {
                                     html += '<div style="margin-bottom: 6px;">';
                                     html += '<span style="background-color: #4caf50; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">SUCCESS</span>';
                                     successOutcomes.forEach(outcome => {
-                                        html += `<div class="clickable-dialogue" onclick="navigateToDialogue(${outcome.conversationid}, ${outcome.dialogueid}, '${outcome.actor.replace(/'/g, "\\'")}', '${outcome.dialogue.replace(/'/g, "\\'")}')" style="margin-left: 10px; margin-top: 4px; font-size: 12px; color: #ccc;">
+                                        // Store dialogue data in global object
+                                        const dataId = `outcome_${outcome.conversationid}_${outcome.dialogueid}`;
+                                        dialogueDataStore[dataId] = {
+                                            actor: outcome.actor,
+                                            dialogue: outcome.dialogue
+                                        };
+                                        html += `<div class="clickable-dialogue" onclick="navigateToOutcome(${outcome.conversationid}, ${outcome.dialogueid})" data-id="${dataId}" style="margin-left: 10px; margin-top: 4px; font-size: 12px; color: #ccc;">
                                             <strong>${outcome.actor}:</strong> ${outcome.dialogue.substring(0, 80)}${outcome.dialogue.length > 500 ? '...' : ''} <span style="color: #888;">→</span>
                                         </div>`;
                                     });
@@ -551,7 +573,13 @@ document.addEventListener("DOMContentLoaded", function() {
                                     html += '<div>';
                                     html += '<span style="background-color: #f44336; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px;">FAILURE</span>';
                                     failureOutcomes.forEach(outcome => {
-                                        html += `<div class="clickable-dialogue" onclick="navigateToDialogue(${outcome.conversationid}, ${outcome.dialogueid}, '${outcome.actor.replace(/'/g, "\\'")}', '${outcome.dialogue.replace(/'/g, "\\'")}')" style="margin-left: 10px; margin-top: 4px; font-size: 12px; color: #ccc;">
+                                        // Store dialogue data in global object
+                                        const dataId = `outcome_${outcome.conversationid}_${outcome.dialogueid}`;
+                                        dialogueDataStore[dataId] = {
+                                            actor: outcome.actor,
+                                            dialogue: outcome.dialogue
+                                        };
+                                        html += `<div class="clickable-dialogue" onclick="navigateToOutcome(${outcome.conversationid}, ${outcome.dialogueid})" data-id="${dataId}" style="margin-left: 10px; margin-top: 4px; font-size: 12px; color: #ccc;">
                                             <strong>${outcome.actor}:</strong> ${outcome.dialogue.substring(0, 80)}${outcome.dialogue.length > 500 ? '...' : ''} <span style="color: #888;">→</span>
                                         </div>`;
                                     });
@@ -591,15 +619,40 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         }
 
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         function navigateToDialogue(conversationId, dialogueId, actor, dialogue) {
             // Reset breadcrumb when navigating to a new dialogue (not from "What Came Before")
             dialogueBreadcrumb = [];
             showDialogueConnections(conversationId, dialogueId, actor, dialogue);
         }
         
-        function navigateToPreviousDialogue(conversationId, dialogueId, actor, dialogue) {
-            // Preserve breadcrumb when navigating backward
-            showDialogueConnections(conversationId, dialogueId, actor, dialogue);
+        function navigateToPreviousDialogue(conversationId, dialogueId) {
+            // Get actor and dialogue from the global data store
+            const clickedElement = event.currentTarget;
+            const dataId = clickedElement.dataset.id;
+            const data = dialogueDataStore[dataId];
+            
+            if (data) {
+                // Preserve breadcrumb when navigating backward
+                showDialogueConnections(conversationId, dialogueId, data.actor, data.dialogue);
+            }
+        }
+        
+        function navigateToOutcome(conversationId, dialogueId) {
+            // Get actor and dialogue from the global data store
+            const clickedElement = event.currentTarget;
+            const dataId = clickedElement.dataset.id;
+            const data = dialogueDataStore[dataId];
+            
+            if (data) {
+                // Navigate to the outcome dialogue (this starts a new navigation path)
+                navigateToDialogue(conversationId, dialogueId, data.actor, data.dialogue);
+            }
         }
         
         function navigateToBreadcrumb(index) {
